@@ -12,7 +12,7 @@ public class AppenderConstants {
     public static final int DEFAULT_THREAD_COUNT = 20;
     public static final int DEFAULT_SHUTDOWN_TIMEOUT_SEC = 30;
     public static final int DEFAULT_THREAD_KEEP_ALIVE_SEC = 30;
-    public static final String DEFAULT_REGION = Regions.US_EAST_1.getName();
+    public static final String DEFAULT_REGION = Regions.AP_NORTHEAST_2.getName();
     public static final String DEFAULT_SERVICE_NAME = "kinesis";
 
 }
