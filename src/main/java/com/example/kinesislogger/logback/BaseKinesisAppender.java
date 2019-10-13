@@ -71,7 +71,7 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
                         PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY, maxRetries, true));
         clientConfiguration.setUserAgent(AppenderConstants.USER_AGENT_STRING);
 
-        BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<Runnable>(bufferSize);
+        BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
         threadPoolExecutor = new ThreadPoolExecutor(threadCount, threadCount,
                 AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
                 taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
@@ -79,13 +79,9 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
 
         this.client = createClient(credentials, clientConfiguration, threadPoolExecutor);
 
-        client.setRegion(findRegion());
-        if (!Validator.isBlank(endpoint)) {
-            if (!Validator.isBlank(region)) {
-                addError("Received configuration for both region as well as Amazon Kinesis endpoint. (" + endpoint
-                        + ") will be used as endpoint instead of default endpoint for region (" + region + ")");
-            }
-            client.setEndpoint(endpoint);
+        if (!Validator.isBlank(region)) {
+            addError("Received configuration for both region as well as Amazon Kinesis endpoint. (" + endpoint
+                    + ") will be used as endpoint instead of default endpoint for region (" + region + ")");
         }
 
         validateStreamName(client, streamName);
