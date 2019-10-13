@@ -28,7 +28,7 @@ public class KinesisAppender<Event extends DeferredProcessingAware>
                                                     ThreadPoolExecutor executor) {
 
         AmazonKinesisAsyncClientBuilder.standard()
-                .withRegion(Regions.AP_NORTHEAST_2)
+                .withRegion(getRegion())
                 .withCredentials(new ProfileCredentialsProvider());
 
         return new AmazonKinesisAsyncClient(credentials, configuration, executor);
@@ -36,22 +36,16 @@ public class KinesisAppender<Event extends DeferredProcessingAware>
 
     @Override
     protected void validateStreamName(AmazonKinesisAsyncClient client, String streamName) {
-        DescribeStreamResult describeResult;
+
         try {
-            describeResult = getClient().describeStream(streamName);
-            String streamStatus = describeResult.getStreamDescription().getStreamStatus();
-            if (!StreamStatus.ACTIVE.name().equals(streamStatus) && !StreamStatus.UPDATING.name().equals(streamStatus)) {
-                setInitializationFailed(true);
-                addError("Stream " + streamName + " is not ready (in active/updating status) for appender: " + name);
+            DescribeStreamResult result = client.describeStream(streamName);
+            if (!"ACTIVE".equals(result.getStreamDescription().getStreamStatus())) {
+                addError("Stream " + streamName + " is not active. Please wait a few moments and try again.");
             }
-        }
-        catch(ResourceNotFoundException rnfe) {
-            setInitializationFailed(true);
-            addError("Stream " + streamName + " doesn't exist for appender: " + name, rnfe);
-        }
-        catch(AmazonServiceException ase) {
-            setInitializationFailed(true);
-            addError("Error connecting to AWS to verify stream " + streamName + " for appender: " + name, ase);
+        } catch (ResourceNotFoundException e) {
+            addError("Stream " + streamName + " does not exist. Please create it in the console.");
+        } catch (Exception e) {
+            addError("Error found while describing the stream " + streamName);
         }
     }
 

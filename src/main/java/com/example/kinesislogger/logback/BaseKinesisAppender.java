@@ -8,11 +8,12 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.regions.Region;
+import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
-import com.example.kinesislogger.logback.helpers.CustomCredentialsProviderChain;
+import com.example.kinesislogger.logback.helpers.CustomClasspathPropertiesFileCredentialsProvider;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
 import com.example.kinesislogger.logback.helpers.Validator;
 
@@ -27,29 +28,17 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private int threadCount = AppenderConstants.DEFAULT_THREAD_COUNT;
     private int shutdownTimeout = AppenderConstants.DEFAULT_SHUTDOWN_TIMEOUT_SEC;
 
-    private String endpoint;
     private String region;
     private String streamName;
-    private String roleToAssumeArn;
 
     private boolean initializationFailed = false;
     private BlockingQueue<Runnable> taskBuffer;
     private ThreadPoolExecutor threadPoolExecutor;
     private LayoutBase<Event> layout;
-    private AWSCredentialsProvider credentials = new CustomCredentialsProviderChain();
     private Client client;
+    private AWSCredentialsProvider credentials = new CustomClasspathPropertiesFileCredentialsProvider();
 
-    /**
-     * Configures appender instance and makes it ready for use by the consumers.
-     * It validates mandatory parameters and confirms if the configured stream is
-     * ready for publishing data yet.
-     * <p>
-     * Error details are made available through the fallback handler for this
-     * appender
-     *
-     * @throws IllegalStateException if we encounter issues configuring this
-     *                               appender instance
-     */
+
     @Override
     public void start() {
         if (layout == null) {
@@ -64,12 +53,14 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
             return;
         }
 
+        checkRegion(region);
+
         ClientConfiguration clientConfiguration = new ClientConfiguration();
         clientConfiguration.setMaxErrorRetry(maxRetries);
         clientConfiguration
                 .setRetryPolicy(new RetryPolicy(PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
                         PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY, maxRetries, true));
-        clientConfiguration.setUserAgent(AppenderConstants.USER_AGENT_STRING);
+        clientConfiguration.setUserAgentPrefix(AppenderConstants.USER_AGENT_STRING);
 
         BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
         threadPoolExecutor = new ThreadPoolExecutor(threadCount, threadCount,
@@ -77,11 +68,11 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
                 taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
         threadPoolExecutor.prestartAllCoreThreads();
 
+        //kinesis client생성
         this.client = createClient(credentials, clientConfiguration, threadPoolExecutor);
 
-        if (!Validator.isBlank(region)) {
-            addError("Received configuration for both region as well as Amazon Kinesis endpoint. (" + endpoint
-                    + ") will be used as endpoint instead of default endpoint for region (" + region + ")");
+        if (Validator.isBlank(region)) {
+            addError("Region is Empty. required Amazon Kinesis Region.");
         }
 
         validateStreamName(client, streamName);
@@ -89,12 +80,6 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
         super.start();
     }
 
-    /**
-     * Closes this appender instance. Before exiting, the implementation tries to
-     * flush out buffered log events within configured shutdownTimeout seconds. If
-     * that doesn't finish within configured shutdownTimeout, it would drop all
-     * the buffered log events.
-     */
     @Override
     public void stop() {
         threadPoolExecutor.shutdown();
@@ -118,77 +103,20 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
         client.shutdown();
     }
 
-    /**
-     * Validate that the stream name exists and is in a valid status.
-     */
-    protected abstract void validateStreamName(Client client, String streamName);
-
-    /**
-     * This method is called whenever a logging happens via logger.log(..) API
-     * calls. Implementation for this appender will take in log events instantly
-     * as long as the buffer is not full (as per user configuration). This call
-     * will block if internal buffer is full until internal threads create some
-     * space by publishing some of the records.
-     * <p>
-     * If there is any error in parsing logevents, those logevents would be
-     * dropped.
-     */
-    @Override
-    protected void append(Event logEvent) {
-        if (initializationFailed) {
-            addError("Check the configuration and whether the configured stream " + streamName
-                    + " exists and is active. Failed to initialize kinesis logback appender: " + name);
-            return;
-        }
-        try {
-            String message = this.layout.doLayout(logEvent);
-
-            putMessage(message);
-        } catch (Exception e) {
-            addError("Failed to schedule log entry for publishing into Kinesis stream: " + streamName, e);
-        }
-    }
-
-    /**
-     * Send message to client
-     *
-     * @param message formatted message to send
-     * @throws Exception if unable to add message
-     */
-    protected abstract void putMessage(String message) throws Exception;
-
-    /**
-     * Creates the thread factory to be used by the {@link #threadPoolExecutor}.
-     */
-    private ThreadFactory setupThreadFactory() {
-        return new NamedThreadFactory(getClass().getSimpleName() + "[" + streamName + "]-");
-    }
-
-    /**
-     * Determine region. If not specified tries to determine region from where the
-     * application is running or fall back to the default.
-     *
-     * @return Region to configure the client
-     */
-    private Region findRegion() {
-        boolean regionProvided = !Validator.isBlank(this.region);
-        if (!regionProvided) {
-            // Determine region from where application is running, or fall back to default region
-            Region currentRegion = Regions.getCurrentRegion();
-            if (currentRegion != null) {
-                return currentRegion;
-            }
-            return Region.getRegion(Regions.fromName(AppenderConstants.DEFAULT_REGION));
-        }
-        return Region.getRegion(Regions.fromName(this.region));
-    }
-
     public LayoutBase<Event> getLayout() {
         return layout;
     }
 
     public void setLayout(LayoutBase<Event> layout) {
         this.layout = layout;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
     }
 
     /**
@@ -340,78 +268,65 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
         return taskBuffer.size();
     }
 
-    public String getRoleToAssumeArn() {
-        return roleToAssumeArn;
-    }
-
-    public void setRoleToAssumeArn(String roleToAssumeArn) {
-        this.roleToAssumeArn = roleToAssumeArn;
-        if (!Validator.isBlank(roleToAssumeArn)) {
-            String sessionId = "session" + Math.random();
-            STSAssumeRoleSessionCredentialsProvider remoteAccountCredentials = new STSAssumeRoleSessionCredentialsProvider(credentials,
-                    roleToAssumeArn,
-                    sessionId);
-
-            credentials = remoteAccountCredentials;
-        }
-    }
-
-    public AWSCredentialsProvider getCredentialsProvider() {
-        return credentials;
-    }
-
-    public void setCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
-        this.credentials = credentialsProvider;
-    }
+    /**
+     * stream name validation (추상 메소드)
+     */
+    protected abstract void validateStreamName(Client client, String streamName);
 
     /**
-     * Returns configured Kinesis endpoint.
+     * client생성 (추상 메소드)
      *
-     * @return configured kinesis endpoint
+     * @param credentials
+     * @param configuration
+     * @param executor
+     * @return
      */
-    public String getEndpoint() {
-        return endpoint;
-    }
-
-    /**
-     * Set kinesis endpoint. If set, it overrides the default kinesis endpoint in
-     * the configured region
-     *
-     * @param endpoint kinesis endpoint to which requests should be made.
-     */
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
-
-    /**
-     * Returns configured region for Kinesis.
-     *
-     * @return configured region for Kinesis
-     */
-    public String getRegion() {
-        return region;
-    }
-
-    /**
-     * Configures the region and default endpoint for all Kinesis calls. If not
-     * overridden by {@link #setEndpoint(String)}, all Kinesis requests are made
-     * to the default endpoint in this region.
-     *
-     * @param region the Kinesis region whose endpoint should be used for kinesis
-     *               requests
-     */
-    public void setRegion(String region) {
-        this.region = region;
-    }
+    protected abstract Client createClient(AWSCredentialsProvider credentials, ClientConfiguration configuration,
+                                           ThreadPoolExecutor executor);
 
     protected void setInitializationFailed(boolean initializationFailed) {
         this.initializationFailed = initializationFailed;
     }
 
-    protected abstract Client createClient(AWSCredentialsProvider credentials, ClientConfiguration configuration,
-                                           ThreadPoolExecutor executor);
-
     protected Client getClient() {
         return client;
+    }
+
+    @Override
+    protected void append(Event logEvent) {
+        if (initializationFailed) {
+            addError("Check the configuration and whether the configured stream " + streamName
+                    + " exists and is active. Failed to initialize kinesis logback appender: " + name);
+            return;
+        }
+        try {
+            String message = this.layout.doLayout(logEvent);
+
+            putMessage(message);
+        } catch (Exception e) {
+            addError("Failed to schedule log entry for publishing into Kinesis stream: " + streamName, e);
+        }
+    }
+
+    /**
+     * Send message to client
+     *
+     * @param message formatted message to send
+     * @throws Exception if unable to add message
+     */
+    protected abstract void putMessage(String message) throws Exception;
+
+    /**
+     * {@link #threadPoolExecutor}에서 사용할 스레드 팩토리를 작성.
+     */
+    private ThreadFactory setupThreadFactory() {
+        return new NamedThreadFactory(getClass().getSimpleName() + "[" + streamName + "]-");
+    }
+
+    private void checkRegion(String regionName) {
+        Region region = RegionUtils.getRegion(regionName);
+        if (region == null) {
+            addError(regionName + " is not a valid AWS region.");
+        }
     }
 }
