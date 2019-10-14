@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configuration>
-    <appender name="KINESIS" class="com.example.kinesislogger.logback.KinesisAppender">
-        <bufferSize>1000</bufferSize>
+<configuration scan="true"  scanPeriod="60 seconds">
+
+    <appender name="KINESIS" class="com.example.kinesislogger.logback.KinesisAsyncAppender">
+        <bufferSize>1</bufferSize>
         <threadCount>20</threadCount>
         <maxRetries>3</maxRetries>
         <shutdownTimeout>30</shutdownTimeout>
@@ -12,15 +13,28 @@
             <pattern>%m</pattern>
         </layout>
     </appender>
-    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%5p [%t] (%F:%L) - %m%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${HOSTNAME}] [%-5level] %logger{35}:%L - %msg%n</pattern>
         </encoder>
     </appender>
-    <logger name="KinesisLogger" additivity="false" level="INFO">
-        <appender-ref ref="KINESIS"/>
+
+    <logger name="org" additivity="false">
+        <level value="INFO" />
+        <appender-ref ref="CONSOLE" />
     </logger>
+
+    <logger name="com.example.kinesislogger" additivity="false" level="INFO">
+        <appender-ref ref="KINESIS"/>
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <logger name="com.amazonaws.services.kinesis" additivity="false" level="DEBUG">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
     <root level="INFO">
-        <appender-ref ref="stdout"/>
+        <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>

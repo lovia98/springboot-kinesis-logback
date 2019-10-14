@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.example</groupId>
     <artifactId>kinesis-logger</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>kinesis-logger</name>
     <description>Demo project for Spring Boot</description>
 
@@ -20,7 +20,7 @@
         <!-- JAVA -->
         <java.version>1.11</java.version>
         <java.source.encoding>${general.encoding}</java.source.encoding>
-        <aws-java-sdk.version>1.11.384</aws-java-sdk.version>
+        <aws-java-sdk.version>1.11.651</aws-java-sdk.version>
         <logback.version>1.2.3</logback.version>
         <jackson.version>2.9.5</jackson.version>
         <maven-compiler-plugin.version>3.5.1</maven-compiler-plugin.version>
@@ -43,15 +43,9 @@
             <scope>test</scope>
         </dependency>
 
-
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-core</artifactId>
-            <version>${aws-java-sdk.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-sts</artifactId>
             <version>${aws-java-sdk.version}</version>
         </dependency>
         <dependency>

@@ -3,15 +3,14 @@ package com.example.kinesislogger.logback;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.LayoutBase;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
-import com.amazonaws.AmazonWebServiceClient;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
+import com.amazonaws.client.builder.ExecutorFactory;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
 import com.example.kinesislogger.logback.helpers.CustomClasspathPropertiesFileCredentialsProvider;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
@@ -19,7 +18,7 @@ import com.example.kinesislogger.logback.helpers.Validator;
 
 import java.util.concurrent.*;
 
-public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware, Client extends AmazonWebServiceClient>
+public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware, Client extends AmazonKinesis>
         extends AppenderBase<Event> {
 
     private String encoding = AppenderConstants.DEFAULT_ENCODING;
@@ -32,8 +31,6 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private String streamName;
 
     private boolean initializationFailed = false;
-    private BlockingQueue<Runnable> taskBuffer;
-    private ThreadPoolExecutor threadPoolExecutor;
     private LayoutBase<Event> layout;
     private Client client;
     private AWSCredentialsProvider credentials = new CustomClasspathPropertiesFileCredentialsProvider();
@@ -41,65 +38,45 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
 
     @Override
     public void start() {
-        if (layout == null) {
-            initializationFailed = true;
-            addError("Invalid configuration - No layout for appender: " + name);
+
+        //logaback 설정이 없는 경우
+        if (isLayoutIsnull()) {
             return;
         }
 
-        if (streamName == null) {
-            initializationFailed = true;
-            addError("Invalid configuration - streamName cannot be null for appender: " + name);
+        //streamName이 없는 경우
+        if (isStreamName()) {
             return;
         }
 
-        checkRegion(region);
+        //리전 체크
+        validationRegion(region);
 
-        ClientConfiguration clientConfiguration = new ClientConfiguration();
-        clientConfiguration.setMaxErrorRetry(maxRetries);
-        clientConfiguration
-                .setRetryPolicy(new RetryPolicy(PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
-                        PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY, maxRetries, true));
-        clientConfiguration.setUserAgentPrefix(AppenderConstants.USER_AGENT_STRING);
+        //clientConfig 생성
+        ClientConfiguration clientConfiguration = getClientConfigurationWithUserAgent();
 
         BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
-        threadPoolExecutor = new ThreadPoolExecutor(threadCount, threadCount,
+
+        ExecutorFactory threadFactory = () -> new ThreadPoolExecutor(threadCount, threadCount,
                 AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
                 taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
-        threadPoolExecutor.prestartAllCoreThreads();
 
         //kinesis client생성
-        this.client = createClient(credentials, clientConfiguration, threadPoolExecutor);
+        this.client = createClient(credentials, clientConfiguration, threadFactory);
 
         if (Validator.isBlank(region)) {
             addError("Region is Empty. required Amazon Kinesis Region.");
         }
 
+        //kinesis stream 체크
         validateStreamName(client, streamName);
 
         super.start();
     }
 
+
     @Override
     public void stop() {
-        threadPoolExecutor.shutdown();
-        BlockingQueue<Runnable> taskQueue = threadPoolExecutor.getQueue();
-        int bufferSizeBeforeShutdown = threadPoolExecutor.getQueue().size();
-        boolean gracefulShutdown = true;
-        try {
-            gracefulShutdown = threadPoolExecutor.awaitTermination(shutdownTimeout, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            // we are anyways cleaning up
-        } finally {
-            int bufferSizeAfterShutdown = taskQueue.size();
-            if (!gracefulShutdown || bufferSizeAfterShutdown > 0) {
-                String errorMsg = "Kinesis Log4J Appender (" + name + ") waited for " + shutdownTimeout
-                        + " seconds before terminating but could send only "
-                        + (bufferSizeAfterShutdown - bufferSizeBeforeShutdown) + " logevents, it failed to send "
-                        + bufferSizeAfterShutdown + " pending log events from it's processing queue";
-                addError(errorMsg);
-            }
-        }
         client.shutdown();
     }
 
@@ -116,7 +93,7 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     }
 
     public void setRegion(String region) {
-        this.region = region;
+        this.region = region == null ? AppenderConstants.DEFAULT_REGION : region;
     }
 
     /**
@@ -126,17 +103,6 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
      */
     public String getStreamName() {
         return streamName;
-    }
-
-    /**
-     * Sets streamName for the kinesis stream to which data is to be published.
-     *
-     * @param streamName name of the kinesis stream to which data is to be
-     *                   published.
-     */
-    public void setStreamName(String streamName) {
-        Validator.validate(!Validator.isBlank(streamName), "streamName cannot be blank");
-        this.streamName = streamName.trim();
     }
 
     /**
@@ -258,37 +224,26 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     }
 
     /**
-     * Returns count of tasks scheduled to send records to Kinesis. Since
-     * currently each task maps to sending one record, it is equivalent to number
-     * of records in the buffer scheduled to be sent to Kinesis.
-     *
-     * @return count of tasks scheduled to send records to Kinesis.
+     * stream이 존재 하는지, active되어 있는지 체크 (추상 메소드)
      */
-    public int getTaskBufferSize() {
-        return taskBuffer.size();
-    }
-
-    /**
-     * stream name validation (추상 메소드)
-     */
-    protected abstract void validateStreamName(Client client, String streamName);
+    protected abstract void validateStreamName(AmazonKinesis client, String streamName);
 
     /**
      * client생성 (추상 메소드)
      *
      * @param credentials
      * @param configuration
-     * @param executor
+     * @param threadFactory
      * @return
      */
     protected abstract Client createClient(AWSCredentialsProvider credentials, ClientConfiguration configuration,
-                                           ThreadPoolExecutor executor);
+                                           ExecutorFactory threadFactory);
 
     protected void setInitializationFailed(boolean initializationFailed) {
         this.initializationFailed = initializationFailed;
     }
 
-    protected Client getClient() {
+    protected AmazonKinesis getClient() {
         return client;
     }
 
@@ -309,24 +264,95 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     }
 
     /**
-     * Send message to client
+     * 메시지
      *
-     * @param message formatted message to send
-     * @throws Exception if unable to add message
+     * @param message
+     * @throws Exception
      */
     protected abstract void putMessage(String message) throws Exception;
 
     /**
-     * {@link #threadPoolExecutor}에서 사용할 스레드 팩토리를 작성.
+     * logback layout null 체크
+     *
+     * @return
      */
-    private ThreadFactory setupThreadFactory() {
-        return new NamedThreadFactory(getClass().getSimpleName() + "[" + streamName + "]-");
+    private boolean isLayoutIsnull() {
+        return checkNullTarget(layout, "Invalid configuration - No layout for appender: ");
     }
 
-    private void checkRegion(String regionName) {
+    /**
+     * streamName null 체크
+     *
+     * @return
+     */
+    private boolean isStreamName() {
+        return checkNullTarget(streamName, "Invalid configuration - streamName cannot be null for appender: ");
+    }
+
+    /**
+     * Sets streamName for the kinesis stream to which data is to be published.
+     *
+     * @param streamName name of the kinesis stream to which data is to be
+     *                   published.
+     */
+    public void setStreamName(String streamName) {
+        Validator.validate(!Validator.isBlank(streamName), "streamName cannot be blank");
+        this.streamName = streamName.trim();
+    }
+
+    /**
+     * 체크할 대상이 null인지 여부
+     *
+     * @param target
+     * @param errorMesg
+     * @return
+     */
+    private boolean checkNullTarget(Object target, String errorMesg) {
+
+        if (target == null) {
+            this.initializationFailed = true;
+            addError(errorMesg + this.name);
+
+            return true;
+
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * 리전 체크
+     *
+     * @param regionName
+     */
+    private void validationRegion(String regionName) {
         Region region = RegionUtils.getRegion(regionName);
         if (region == null) {
             addError(regionName + " is not a valid AWS region.");
         }
+    }
+
+    /**
+     * clientConfig 생성
+     *
+     * @return
+     */
+    private ClientConfiguration getClientConfigurationWithUserAgent() {
+        ClientConfiguration clientConfiguration = new ClientConfiguration();
+        clientConfiguration.setMaxErrorRetry(maxRetries);
+        clientConfiguration
+                .setRetryPolicy(new RetryPolicy(PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
+                        PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY, maxRetries, true));
+        clientConfiguration.setUserAgentPrefix(AppenderConstants.USER_AGENT_STRING);
+        return clientConfiguration;
+    }
+
+    /**
+     * 새로운 쓰레드를 만들때 마다 사용할 factory
+     *
+     * @return
+     */
+    private ThreadFactory setupThreadFactory() {
+        return new NamedThreadFactory(getClass().getSimpleName() + "[" + streamName + "]-");
     }
 }
