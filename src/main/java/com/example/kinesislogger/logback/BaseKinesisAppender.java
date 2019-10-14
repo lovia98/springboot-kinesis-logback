@@ -27,6 +27,9 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private int threadCount = AppenderConstants.DEFAULT_THREAD_COUNT;
     private int shutdownTimeout = AppenderConstants.DEFAULT_SHUTDOWN_TIMEOUT_SEC;
 
+    private String accessKey;
+    private String secretKey;
+
     private String region;
     private String streamName;
 
@@ -36,37 +39,24 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private AWSCredentialsProvider credentials = new CustomClasspathPropertiesFileCredentialsProvider();
 
 
+    /**
+     * 로깅 start
+     */
     @Override
     public void start() {
 
-        //logaback 설정이 없는 경우
         if (isLayoutIsnull()) {
             return;
         }
 
-        //streamName이 없는 경우
         if (isStreamName()) {
             return;
         }
 
-        //리전 체크
         validationRegion(region);
 
-        //clientConfig 생성
-        ClientConfiguration clientConfiguration = getClientConfigurationWithUserAgent();
-
-        BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
-
-        ExecutorFactory threadFactory = () -> new ThreadPoolExecutor(threadCount, threadCount,
-                AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
-                taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
-
-        //kinesis client생성
-        this.client = createClient(credentials, clientConfiguration, threadFactory);
-
-        if (Validator.isBlank(region)) {
-            addError("Region is Empty. required Amazon Kinesis Region.");
-        }
+        //KinesisClient 생성
+        createConfigAndClient();
 
         //kinesis stream 체크
         validateStreamName(client, streamName);
@@ -74,10 +64,50 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
         super.start();
     }
 
-
+    /**
+     * 로깅 종료
+     */
     @Override
     public void stop() {
         client.shutdown();
+    }
+
+    /**
+     * 메시지 append
+     *
+     * @param logEvent
+     */
+    @Override
+    protected void append(Event logEvent) {
+        if (initializationFailed) {
+            addError("Check the configuration and whether the configured stream " + streamName
+                    + " exists and is active. Failed to initialize kinesis logback appender: " + name);
+            return;
+        }
+        try {
+
+            String message = this.layout.doLayout(logEvent);
+            putMessage(message);
+
+        } catch (Exception e) {
+            addError("Failed to schedule log entry for publishing into Kinesis stream: " + streamName, e);
+        }
+    }
+
+    public String getAccessKey() {
+        return accessKey;
+    }
+
+    public void setAccessKey(String accessKey) {
+        this.accessKey = accessKey;
+    }
+
+    public String getSecretKey() {
+        return secretKey;
+    }
+
+    public void setSecretKey(String secretKey) {
+        this.secretKey = secretKey;
     }
 
     public LayoutBase<Event> getLayout() {
@@ -247,21 +277,6 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
         return client;
     }
 
-    @Override
-    protected void append(Event logEvent) {
-        if (initializationFailed) {
-            addError("Check the configuration and whether the configured stream " + streamName
-                    + " exists and is active. Failed to initialize kinesis logback appender: " + name);
-            return;
-        }
-        try {
-            String message = this.layout.doLayout(logEvent);
-
-            putMessage(message);
-        } catch (Exception e) {
-            addError("Failed to schedule log entry for publishing into Kinesis stream: " + streamName, e);
-        }
-    }
 
     /**
      * 메시지
@@ -326,10 +341,30 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
      * @param regionName
      */
     private void validationRegion(String regionName) {
+
         Region region = RegionUtils.getRegion(regionName);
         if (region == null) {
             addError(regionName + " is not a valid AWS region.");
         }
+    }
+
+    /**
+     * kinesisClient 생성
+     *
+     *  - clientConfiguration / threadFactory 을 설정하여 client에 set함
+     *
+     */
+    private void createConfigAndClient() {
+
+        ClientConfiguration clientConfiguration = getClientConfigurationWithUserAgent();            //clientCofnig
+
+        BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);                 //bufferSize
+
+        ExecutorFactory threadFactory = () -> new ThreadPoolExecutor(threadCount, threadCount,      //threadFactory
+                AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
+                taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
+
+        this.client = createClient(credentials, clientConfiguration, threadFactory);          //awsKinesisClient
     }
 
     /**

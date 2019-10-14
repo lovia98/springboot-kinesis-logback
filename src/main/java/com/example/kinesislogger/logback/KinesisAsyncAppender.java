@@ -18,7 +18,7 @@ import java.util.UUID;
 /**
  * Kinesis 비동기 Appender
  *
- * @param <Event>
+ * @author 한주희
  */
 public class KinesisAsyncAppender<Event extends DeferredProcessingAware>
         extends BaseKinesisAppender<Event, AmazonKinesisAsync> {

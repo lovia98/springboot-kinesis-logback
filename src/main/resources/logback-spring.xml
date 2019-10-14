@@ -1,22 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration scan="true"  scanPeriod="60 seconds">
 
+    <!-- 외부 설정파일을 사용 -->
+    <property resource="logback.properties"/>
+
     <appender name="KINESIS" class="com.example.kinesislogger.logback.KinesisAsyncAppender">
-        <bufferSize>1</bufferSize>
-        <threadCount>20</threadCount>
-        <maxRetries>3</maxRetries>
-        <shutdownTimeout>30</shutdownTimeout>
-        <streamName>log_stream_test</streamName>
-        <region>ap-northeast-2</region>
-        <encoding>UTF-8</encoding>
+        <accessKey>${aws.kinesis.accessKey}</accessKey>
+        <secretKey>${aws.kinesis.secretKey}</secretKey>
+        <bufferSize>${aws.kinesis.bufferSize}</bufferSize>
+        <threadCount>${aws.kinesis.threadCount}</threadCount>
+        <maxRetries>${aws.kinesis.maxRetries}</maxRetries>
+        <shutdownTimeout>${aws.kinesis.shutdownTimeout}</shutdownTimeout>
+        <streamName>${aws.kinesis.streamName}</streamName>
+        <region>${aws.kinesis.region}</region>
+        <encoding>${aws.kinesis.encoding}</encoding>
         <layout class="ch.qos.logback.classic.PatternLayout">
-            <pattern>%m</pattern>
+            <pattern>${log.pattern}</pattern>
         </layout>
     </appender>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${HOSTNAME}] [%-5level] %logger{35}:%L - %msg%n</pattern>
+            <pattern>${log.pattern}</pattern>
         </encoder>
     </appender>
 
