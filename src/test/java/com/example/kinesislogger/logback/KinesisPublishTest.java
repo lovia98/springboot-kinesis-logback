@@ -1,6 +1,8 @@
-package com.example.kinesislogger;
+package com.example.kinesislogger.logback;
 
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.kinesis.AmazonKinesis;
@@ -11,7 +13,6 @@ import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.PutRecordRequest;
 import com.amazonaws.services.kinesis.model.PutRecordResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.example.kinesislogger.logback.AppenderConstants;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
 import com.example.kinesislogger.logback.helpers.CustomClasspathPropertiesFileCredentialsProvider;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
@@ -24,6 +25,7 @@ import java.util.concurrent.*;
 
 import static org.assertj.core.api.Java6Assertions.assertThat;
 
+
 /**
  * 키네시스 전송 테스트
  *
@@ -33,6 +35,8 @@ public class KinesisPublishTest {
 
     private final String streamName = "log_stream_test";
     private final String regionName = "ap-northeast-2";
+    private final String access_key_id = "access_key_id";
+    private final String secret_key_id = "secret_key_id";
     private int threadCount = AppenderConstants.DEFAULT_THREAD_COUNT;
     private int bufferSize = AppenderConstants.DEFAULT_BUFFER_SIZE;
 
@@ -45,7 +49,6 @@ public class KinesisPublishTest {
     @Test
     public void kinesis_test() throws Exception {
 
-        
         validationRegion(regionName);
 
         //클라이언트 생성
@@ -81,11 +84,12 @@ public class KinesisPublishTest {
     private AmazonKinesisAsync getAmazonKinesisAsyncClient() {
 
         BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
+        BasicAWSCredentials awsCreds = new BasicAWSCredentials(access_key_id, secret_key_id);
 
         AmazonKinesisAsyncClientBuilder clientBuilder = AmazonKinesisAsyncClientBuilder.standard();
 
         clientBuilder.setRegion(regionName); // 리전
-        clientBuilder.setCredentials(new CustomClasspathPropertiesFileCredentialsProvider()); //인증정보
+        clientBuilder.setCredentials(new AWSStaticCredentialsProvider(awsCreds)); //인증정보
         clientBuilder.setClientConfiguration(getClientConfiguration().withConnectionTimeout(1000).withMaxErrorRetry(0)); //client환경 설정
         clientBuilder.setExecutorFactory(() -> new ThreadPoolExecutor(threadCount, threadCount,
                 AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
@@ -95,9 +99,12 @@ public class KinesisPublishTest {
     }
 
     private AmazonKinesis getAmazonKinesis() {
+
+        BasicAWSCredentials awsCreds = new BasicAWSCredentials(access_key_id, secret_key_id);
+
         AmazonKinesisClientBuilder clientBuilder = AmazonKinesisClientBuilder.standard();
         clientBuilder.setRegion(regionName); // 리전
-        clientBuilder.setCredentials(new CustomClasspathPropertiesFileCredentialsProvider()); //인증정보
+        clientBuilder.setCredentials(new AWSStaticCredentialsProvider(awsCreds)); //인증정보
         clientBuilder.setClientConfiguration(getClientConfiguration()); //client환경 설정
         return clientBuilder.build();
     }

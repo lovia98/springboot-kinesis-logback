@@ -5,6 +5,8 @@ import ch.qos.logback.core.LayoutBase;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.ExecutorFactory;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
@@ -33,7 +35,7 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private boolean initializationFailed = false;
     private LayoutBase<Event> layout;
     private Client client;
-    private AWSCredentialsProvider credentials = new CustomClasspathPropertiesFileCredentialsProvider();
+    private AWSCredentialsProvider credentials;
 
 
     @Override
@@ -57,9 +59,14 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
 
         BlockingQueue<Runnable> taskBuffer = new LinkedBlockingDeque<>(bufferSize);
 
+        //쓰레드풀 팩토리
         ExecutorFactory threadFactory = () -> new ThreadPoolExecutor(threadCount, threadCount,
                 AppenderConstants.DEFAULT_THREAD_KEEP_ALIVE_SEC, TimeUnit.SECONDS,
                 taskBuffer, setupThreadFactory(), new BlockFastProducerPolicy());
+
+        //credentials
+        BasicAWSCredentials awsCreds = new BasicAWSCredentials("accessKey", "secret_key_id");
+        credentials = new AWSStaticCredentialsProvider(awsCreds);
 
         //kinesis client생성
         this.client = createClient(credentials, clientConfiguration, threadFactory);
