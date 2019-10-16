@@ -1,4 +1,4 @@
-package com.example.kinesislogger;
+package com.example.kinesislogger.logback;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

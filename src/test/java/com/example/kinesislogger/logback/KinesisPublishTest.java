@@ -14,9 +14,12 @@ import com.amazonaws.services.kinesis.model.PutRecordRequest;
 import com.amazonaws.services.kinesis.model.PutRecordResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
-import com.example.kinesislogger.logback.helpers.CustomClasspathPropertiesFileCredentialsProvider;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -31,15 +34,24 @@ import static org.assertj.core.api.Java6Assertions.assertThat;
  *
  * @author 한주희
  */
+@RunWith(SpringRunner.class)
+@TestPropertySource(locations = "classpath:logback-test.properties")
 public class KinesisPublishTest {
 
-    private final String streamName = "log_stream_test";
-    private final String regionName = "ap-northeast-2";
-    private final String access_key_id = "access_key_id";
-    private final String secret_key_id = "secret_key_id";
-    private int threadCount = AppenderConstants.DEFAULT_THREAD_COUNT;
-    private int bufferSize = AppenderConstants.DEFAULT_BUFFER_SIZE;
+    @Value("${aws.kinesis.streamName}")
+    private String streamName;
+    @Value("${aws.kinesis.region}")
+    private String regionName;
 
+    @Value("${aws.kinesis.accessKey}")
+    private String access_key_id;
+    @Value("${aws.kinesis.secretKey}")
+    private String secret_key_id;
+
+    @Value("${aws.kinesis.threadCount}")
+    private int threadCount;
+    @Value("${aws.kinesis.bufferSize}")
+    private int bufferSize;
 
     /**
      * 동기 전송 테스트

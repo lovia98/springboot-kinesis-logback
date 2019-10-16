@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true"  scanPeriod="60 seconds">
+
+    <!-- 외부 설정파일을 사용 -->
+    <property resource="logback-test.properties"/>
+
+    <appender name="KINESIS" class="com.example.kinesislogger.logback.KinesisAsyncAppender">
+        <accessKey>${aws.kinesis.accessKey}</accessKey>
+        <secretKey>${aws.kinesis.secretKey}</secretKey>
+        <bufferSize>${aws.kinesis.bufferSize}</bufferSize>
+        <threadCount>${aws.kinesis.threadCount}</threadCount>
+        <maxRetries>${aws.kinesis.maxRetries}</maxRetries>
+        <shutdownTimeout>${aws.kinesis.shutdownTimeout}</shutdownTimeout>
+        <streamName>${aws.kinesis.streamName}</streamName>
+        <region>${aws.kinesis.region}</region>
+        <encoding>${aws.kinesis.encoding}</encoding>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>${log.pattern}</pattern>
+        </layout>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${log.pattern}</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="org" additivity="false">
+        <level value="INFO" />
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <logger name="com.example.kinesislogger" additivity="false" level="INFO">
+        <appender-ref ref="KINESIS"/>
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <logger name="com.amazonaws.services.kinesis" additivity="false" level="DEBUG">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

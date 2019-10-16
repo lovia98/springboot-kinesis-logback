@@ -14,7 +14,6 @@ import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
-import com.example.kinesislogger.logback.helpers.CustomClasspathPropertiesFileCredentialsProvider;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
 import com.example.kinesislogger.logback.helpers.Validator;
 
@@ -355,9 +354,8 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
 
     /**
      * kinesisClient 생성
-     *
-     *  - clientConfiguration / threadFactory 을 설정하여 client에 set함
-     *
+     * <p>
+     * - clientConfiguration / threadFactory 을 설정하여 client에 set함
      */
     private void createConfigAndClient() {
 
