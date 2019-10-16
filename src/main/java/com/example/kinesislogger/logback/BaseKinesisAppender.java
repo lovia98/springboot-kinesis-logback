@@ -5,6 +5,8 @@ import ch.qos.logback.core.LayoutBase;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.ExecutorFactory;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
@@ -36,7 +38,7 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     private boolean initializationFailed = false;
     private LayoutBase<Event> layout;
     private Client client;
-    private AWSCredentialsProvider credentials = new CustomClasspathPropertiesFileCredentialsProvider();
+    private AWSCredentialsProvider credentials;
 
 
     /**
@@ -45,17 +47,16 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     @Override
     public void start() {
 
-        if (isLayoutIsnull()) {
-            return;
-        }
-
-        if (isStreamName()) {
+        if (isLayoutIsnull() || isStreamName()) {
             return;
         }
 
         validationRegion(region);
 
-        //KinesisClient 생성
+        //credentials
+        credentials = new AWSStaticCredentialsProvider(new BasicAWSCredentials(getAccessKey(), getSecretKey()));
+
+        //create kinesis client
         createConfigAndClient();
 
         //kinesis stream 체크
@@ -73,7 +74,7 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     }
 
     /**
-     * 메시지 append
+     * 로그 append
      *
      * @param logEvent
      */
@@ -341,6 +342,10 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
      * @param regionName
      */
     private void validationRegion(String regionName) {
+
+        if (Validator.isBlank(region)) {
+            addError("Region is Empty. required Amazon Kinesis Region.");
+        }
 
         Region region = RegionUtils.getRegion(regionName);
         if (region == null) {
