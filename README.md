@@ -14,8 +14,12 @@
          <streamName>${aws.kinesis.streamName}</streamName>
          <region>${aws.kinesis.region}</region>
          <encoding>${aws.kinesis.encoding}</encoding>
-         <layout class="ch.qos.logback.classic.PatternLayout">
-             <pattern>${log.pattern}</pattern>
+         <layout class="ch.qos.logback.contrib.json.classic.JsonLayout">
+             <jsonFormatter
+                     class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
+                 <prettyPrint>false</prettyPrint>
+             </jsonFormatter>
+             <timestampFormat>yyyy-MM-dd' 'HH:mm:ss.SSS</timestampFormat>
          </layout>
      </appender>  
     ```
