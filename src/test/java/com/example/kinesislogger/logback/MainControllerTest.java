@@ -14,8 +14,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Web Application 로깅 테스트
+ */
 @RunWith(SpringRunner.class)
-@SpringBootTest
+@SpringBootTest(properties = {"server.port=8080"})
 @AutoConfigureMockMvc
 public class MainControllerTest {
 

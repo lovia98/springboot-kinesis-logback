@@ -16,6 +16,7 @@ import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.example.kinesislogger.logback.helpers.BlockFastProducerPolicy;
 import com.example.kinesislogger.logback.helpers.NamedThreadFactory;
 import com.example.kinesislogger.logback.helpers.Validator;
+import org.slf4j.MDC;
 
 import java.util.concurrent.*;
 
@@ -33,6 +34,9 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
 
     private String region;
     private String streamName;
+
+    private String hostname;
+    private String port;
 
     private boolean initializationFailed = false;
     private LayoutBase<Event> layout;
@@ -85,6 +89,9 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
             return;
         }
         try {
+            //로깅 메세지에 추가 데이터 set
+            MDC.put("hostname", hostname);
+            MDC.put("port", port);
 
             String message = this.layout.doLayout(logEvent);
             putMessage(message);
@@ -251,6 +258,23 @@ public abstract class BaseKinesisAppender<Event extends DeferredProcessingAware,
     public void setShutdownTimeout(int shutdownTimeout) {
         Validator.validate(shutdownTimeout > 0, "shutdownTimeout must be >0");
         this.shutdownTimeout = shutdownTimeout;
+    }
+
+    public String getHostname() {
+        return hostname;
+    }
+
+    public void setHostname(String hostname) {
+        this.hostname = hostname;
+    }
+
+    public String getPort() {
+        return port;
+    }
+
+    public void setPort(String port) {
+
+        this.port = port;
     }
 
     /**
