@@ -1,5 +1,12 @@
 version: '3'
 services:
+  logstash:
+    build: ./logstash
+    volumes:
+      - ./logstash:/config
+    command: logstash -f /config/logstash.conf
+    depends_on:
+      - elasticsearch
   # master-node의 Docker 서비스입니다.
   # Kibana에서 기본적으로 호출하는 ES host주소가 'http://elsaticsearch:9200'이기 때문에 서비스명은 elasticsearch로 쓰시는게 편합니다.
   # 다른 서비스명을 사용시 Kibana ES host 설정도 같이 추가해주어야 정상 동작합니다.
