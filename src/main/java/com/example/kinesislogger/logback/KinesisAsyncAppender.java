@@ -74,15 +74,14 @@ public class KinesisAsyncAppender<Event extends DeferredProcessingAware>
      */
     @Override
     protected void putMessage(String message) throws Exception {
-        ByteBuffer data = ByteBuffer.wrap(message.getBytes(getEncoding()));
 
-        //callback 을 넣으면 비동기처리가 될지 확인 필요
-//        ((AmazonKinesisAsync) getClient()).putRecordAsync(new PutRecordRequest().withPartitionKey(UUID.randomUUID().toString())
-//                .withStreamName(getStreamName()).withData(data), asyncCallHandler);
+        System.out.println(message);
+
+        ByteBuffer data = ByteBuffer.wrap(message.getBytes(getEncoding()));
 
         AmazonKinesisAsync client = (AmazonKinesisAsync) getClient();
         client.putRecordAsync(new PutRecordRequest().withPartitionKey(UUID.randomUUID().toString())
-                .withStreamName(getStreamName()).withData(data));
+                .withStreamName(getStreamName()).withData(data), asyncCallHandler);
     }
 
 }
