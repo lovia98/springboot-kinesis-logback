@@ -1,12 +1,5 @@
 version: '3'
 services:
-  logstash:
-    build: ./logstash
-    volumes:
-      - ./logstash:/config
-    command: logstash -f /config/logstash.conf
-    depends_on:
-      - elasticsearch
   # master-node의 Docker 서비스입니다.
   # Kibana에서 기본적으로 호출하는 ES host주소가 'http://elsaticsearch:9200'이기 때문에 서비스명은 elasticsearch로 쓰시는게 편합니다.
   # 다른 서비스명을 사용시 Kibana ES host 설정도 같이 추가해주어야 정상 동작합니다.
@@ -70,21 +63,41 @@ services:
     # 각 서비스를 순차적으로 실행하기 위해 설정해주었습니다. (필수아님)
     depends_on:
       - elasticsearch
-  # Kibana 설정입니다.
-  kibana:
-    container_name: kibana
-    image: kibana:6.5.3
+  logstash:
+    container_name: logstash
+    build: ./logstash
+    command:
+      - cat ~/.aws/credentials
+      - logstash -f /usr/share/logstash/pipeline/logstash.conf
+    environment:
+      LS_JAVA_OPTS: "-Xmx2048m -Xms2048m"
     ports:
-      - 5601:5601
+      - 9600:9600
     networks:
       - esnet
+    stdin_open: true
+    tty: true
     depends_on:
       - elasticsearch
       - elasticsearch2
+  # Kibana 설정입니다.
+  # kibana:
+  #   container_name: kibana
+  #   image: kibana:6.5.3
+  #   ports:
+  #     - 5601:5601
+  #   networks:
+  #     - esnet
+  #   tty: true
+  #   depends_on:
+  #     - elasticsearch
+  #     - elasticsearch2
 volumes:
   es1:
     driver: local
   es2:
+    driver: local
+  ls:
     driver: local
 networks:
   esnet:
