@@ -13,16 +13,16 @@
          <shutdownTimeout>${aws.kinesis.shutdownTimeout}</shutdownTimeout>
          <streamName>${aws.kinesis.streamName}</streamName>
          <region>${aws.kinesis.region}</region>
-         <encoding>${aws.kinesis.encoding}</encoding>
-         <layout class="ch.qos.logback.contrib.json.classic.JsonLayout">
-             <jsonFormatter
-                     class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
-                 <prettyPrint>false</prettyPrint>
-             </jsonFormatter>
-             <timestampFormat>yyyy-MM-dd' 'HH:mm:ss.SSS</timestampFormat>
-         </layout>
+         <encoding>${aws.kinesis.encoding}</encoding>         
+         <layout class="net.logstash.logback.layout.LogstashLayout"> <!-- json 포맷 -->
+            <timestampPattern>yyyy-MM-dd' 'HH:mm:ss.SSS</timestampPattern>
+            <customFields>{"port":"${server.port}"}</customFields>
+        </layout>
      </appender>  
     ```
+
+* 로직 내에서 로깅 json 객체에 key를 추가 하고 싶을 경우 lostash marker 이용
+
 
 * 참고한 코드 
    - https://github.com/aws-samples/amazon-kinesis-learning
