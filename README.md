@@ -22,7 +22,18 @@
     ```
 
 * 로직 내에서 로깅 json 객체에 key를 추가 하고 싶을 경우 lostash marker 이용
+ example)
+    ```
+      import static net.logstash.logback.marker.Markers.append;
 
+      /**
+       * json로그에 key 추가
+       */
+      @GetMapping("/append")
+      public void addKeyToJsonLog() {
+          log.info(append("mycustomKey", "hello"), "test Message");
+      }
+    ```
 
 * 참고한 코드 
    - https://github.com/aws-samples/amazon-kinesis-learning
